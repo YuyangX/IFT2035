@@ -69,3 +69,10 @@ cons(1,nil)
 %app(app(var(4), 1), var(3)) (identique)
 %list(int)
 
+let([length = lambda(x, if(empty(x), 0, 1 + length(cdr(x))))],
+             length(?(42, ?(41, ?(40, nil))))
+             + length(cons(1,nil)))
+%let([lambda(if(app(var(7), var(0)), 0, app(app(var(2), 1), app(var(1), app(var(9), var(0))))))],
+%            app(app(var(1), app(var(0), app(app(var(5), 42), app(app(var(5), 41), app(app(var(5), 40), var(4)))))),
+%            app(var(0), app(app(var(5), 1), var(4)))))
+%int
