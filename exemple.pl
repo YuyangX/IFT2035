@@ -44,7 +44,7 @@ let([x = 1], 3 + x)
 %let([1], app(app(var(1), 3), var(0)))
 
 let(f(x) = x+1, f(3))	
-%let([lambda(app(app(var(1), var(0)),1))], app(var(0), 3))
+%let([lambda(app(app(var(2), var(0)),1))], app(var(0), 3))
 
 let([x = 1, x = lambda(a, a + 1)], (3 + x(x)))	
 %let([1, lambda(app(app(var(3), var(0)), 1))], app(app(var(2), 3), app(var(0), var(1))))
