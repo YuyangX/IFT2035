@@ -1,0 +1,375 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{times}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{fancybox}            %For \ovalbox
+
+\title{Travail pratique \#2}
+\author{IFT-2035}
+
+\newcommand \kw [1] {\textsf{#1}}
+\newcommand \id [1] {\textsl{#1}}
+\newcommand \punc [1] {\kw{`#1'}}
+\newenvironment{outitemize}{
+  \begin{itemize}
+  \let \origitem \item \def \item {\origitem[]\hspace{-18pt}}
+}{
+  \end{itemize}
+}
+\newcommand \Align [2][t] {\begin{array}[#1]{@{}l@{}} #2 \end{array}}
+\newcommand \MAlign \Align
+\newcommand \Jop  [3] {\vdash#1\;:\;#2\;\Rightarrow\;#3}
+\newcommand \Jval [2] {\vdash #1 : #2}
+\newcommand \Jtype [3][\Gamma] {#1 \vdash #2 : #3}
+\renewcommand \: {\!:\!}
+\newcommand \uPTS {{\ensuremath{\mu PTS}}}
+
+\begin{document}
+
+\maketitle
+
+%% {\centering \ovalbox{\large ¡¡ du le 3 décembre à 23h59 !!} \\}
+
+\section{Survol}
+
+Ce TP a pour but de vous familiariser avec le langage Prolog, ainsi qu'avec
+l'inférence de types.
+Comme pour le TP précédent, les étapes sont les suivantes:
+\begin{enumerate}
+\item Parfaire sa connaissance de Prolog.
+\item Lire et comprendre cette donnée.
+\item Lire, et comprendre le code fourni.
+\item Compléter le code fourni.
+\item Écrire un rapport.  Il doit décrire \textbf{votre} expérience pendant
+  les points précédents: problèmes rencontrés, surprises, choix que vous
+  avez dû faire, options que vous avez sciemment rejetées, etc...  Le
+  rapport ne doit pas excéder 5 pages.
+\end{enumerate}
+
+Ce travail est à faire en groupes de 2 étudiants.  Le rapport, au format
+\LaTeX\ exclusivement (compilable sur \texttt{ens.iro}) et le code sont
+à remettre par remise électronique avant la date indiquée.  Aucun retard ne
+sera accepté.  Indiquez clairement votre nom au début de chaque fichier.
+
+Si un étudiant préfère travailler seul, libre à lui, mais l'évaluation de
+son travail n'en tiendra pas compte.  Des groupes de 3 ou plus
+sont \textbf{exclus}.
+
+\section{Le langage H2035}
+
+Vous allez écrire un programme Prolog qui va manipuler des expressions du
+langage du futur H2035.  C'est un langage fontionnel typé statiquement, avec
+surcharge et polymorphisme paramétrique similaire à Haskell.
+Votre travail sera d'implanter la phase d'élaboration qui fait l'inférence
+de types, l'élimination du sucre syntaxique, et la conversion vers DeBuijn,
+ainsi que l'évaluateur.
+
+La syntaxe du langage est la suivante:
+\begin{displaymath}
+  \begin{array}{c@{~::=~}l}
+    \tau & \kw{int} ~\mid~ \kw{bool} ~\mid~ \kw{list}(\tau)
+    ~\mid~ \tau_1 \to \tau_2 ~\mid~ \alpha ~\mid~ \kw{forall}(\alpha,\tau) \\
+    e & \MAlign{
+      c ~\mid~ x ~\mid~ \kw{lambda}(x,e) ~\mid~ \kw{app}(e_1,e_2)
+      ~\mid~ x(e_1,..,e_n) ~\mid~ \\
+      \kw{if}(e_1,e_2,e_3) ~\mid~ \kw{let}(\id{rdecls},e) ~\mid~(e : \tau)~\mid~ {?}
+    } \smallskip \\
+    \id{rdecls} & \id{rdecl} ~\mid~ \id{rdecl}, \id{rdecll}  \smallskip\\
+    \id{rdecl} & \id{decl} ~\mid~ [ \id{decls} ] \smallskip\\
+    \id{decls} & \id{decl} ~\mid~ \id{decl}, \id{decls}  \smallskip\\
+    \id{decl} & x = e ~\mid~ x(x_1,..,x_n) = e
+  \end{array}
+\end{displaymath}
+où \kw{forall} est le type donné aux expressions polymorphes.
+$c$ représente n'importe quelle constante prédéfinie, cela inclut par
+exemple les nombres entiers et les opérations sur les listes; \kw{lambda} et
+\kw{app} définissent et appellent les fonctions, et \kw{let} introduit un
+ensemble de déclarations locales, où celles qui sont placées entre $[...]$
+peuvent être (mutuellement) récursives (d'où le $r$ de \id{rdecl}).
+
+Comme on le voit, la syntaxe n'inclut presqu'aucune annotation de types, car
+les types seront complètement inférés, tout comme en Haskell.  La seule
+annotation de type est de la forme $(e : \tau)$, qui permet d'aider l'inférence
+lorsque nécessaire ou de vérifier que l'inférence trouve le bon type.
+En plus de cela, la syntaxe inclut aussi le terme $?$ qui fait l'inverse
+de l'inférence de type, c'est à dire que le code sera inféré sur la base du
+type attendu.
+
+La syntaxe du langage repose sur la syntaxe des termes de Prolog, donc par
+exemple, $x = e$ peut aussi s'écrire $\kw{=}(x,e)$, et $+(e_1,e_2)$ peut
+s'écrire $e_1 + e_2$, et votre code n'a pas à s'en soucier car ces
+différences n'affectent que l'analyseur syntaxique, qui est déjà fourni
+par Prolog lui même.
+
+Le langage inclut parmis ses primitives des opérations sur les listes dont
+le nom dérive de ceux utilisés en Lisp: \id{cons}, \id{car}, \id{cdr},
+\id{nil}.  À l'exécution, ces listes sont représentées par des
+listes Prolog.
+
+\section{Élaboration}
+
+Après l'analyse syntaxique (qu'on ne voit pas dans le code vu qu'elle est
+faite par Prolog), le code passe par une phase d'\emph{élaboration} qui va
+implémenter certaines fonctionnalités du langages: l'élimination du sucre
+syntaxique, l'inférence des types (et du code), et la ``désambiguation''
+des identificateurs.
+
+\subsection{Sucre syntaxique}
+
+H2035 utilise un peu de sucre syntaxique que la phase d'élaboration va
+devoir éliminer.  Plus précisément, les règles d'équivalence suivantes
+devront être utilisées:
+\begin{displaymath}
+  \begin{array}{r@{~\Longrightarrow~}l}
+    f(e_1,...,e_n) & \kw{app}(...\kw{app}(f,e_1)...,e_n) \\
+    f(x_1,...,x_n) = e & f = \kw{lambda}(x_1,...\kw{lambda}(x_n,e)...) \\
+    \kw{let}(\id{decl}, e) & \kw{let}([\id{decl}], e) \\
+    \kw{let}(d_1,...,d_n, e) & \kw{let}(d_1,...\kw{let}(d_n,e)...)
+  \end{array}
+\end{displaymath}
+
+\subsection{Surcharge}
+
+H2035, contrairement à Psil, Slip, et Haskell, offre ce qu'on appelle la
+\emph{surcharge}, en anglais \emph{overloading}.  Cette fonctionnalité
+permet d'avoir plusieurs définitions actives pour un même identificateur.
+Habituellement, lorsqu'un identificateur est défini plusieurs fois, la
+définition la plus proche cache les autres (en anglais, on utilise le terme
+\emph{shadowing}), mais en H2035 ce n'est pas le cas.  Ainsi,
+chaque usage d'un identificateur introduit une ambiguïté s'il y a plusieurs
+définitions qui y corresponent.  L'élaboration va résoudre ces ambiguïtés
+en utilisant les informations de types.  Exemple:
+%%
+\begin{verbatim}
+  let(x = 2,
+      x(i) = i + x,
+      x(l) = cons(3,l),
+      x + x(car(x(nil))))
+\end{verbatim}
+%%
+Ces trois définitions de $x$ ont chacune un type différent, et l'élaboration
+va donc pouvoir utiliser cette information de typage pour savoir que dans
+l'expression finale, chacun des trois $x$ fait référence à une
+autre définition.
+
+L'expression $?$ généralise cette idée au cas où le nom de la variable n'est
+pas spécifié et l'élaboration peut utiliser n'importe quelle variable dont
+le type concorde.  Bien sûr, on s'attend à ce que le programmeur n'utilise
+ce terme que dans le cas où il n'y a qu'une seule variable du bon type.
+
+Le code renvoyé par le prédicat \id{elaborate} (et attendu par \id{eval})
+n'a plus de telles ambiguïtés, car il utilise ce qu'on appelle les
+\emph{indices de de Bruijn} %% (comme vous l'avez fait au TP1)
+plutôt que des variables avec des noms.  Plus précisément, il
+doit utiliser la syntaxe suivante:
+%%
+\begin{displaymath}
+  \begin{array}{c@{~::=~}l}
+    e & n ~\mid~ \kw{var}(i) ~\mid~ \kw{lambda}(e) ~\mid~ \kw{app}(e_1,e_2)
+    ~\mid~ \kw{if}(e_1,e_2,e_3) ~\mid~ \kw{let}([es],e) \smallskip\\
+    es & e ~\mid~ e, es
+  \end{array}
+  %% ~\mid~ \kw{tfn}(\alpha,e) ~\mid~ \kw{tapp}(\tau,e)
+\end{displaymath}
+%
+où $\kw{var}(i)$ est une référence à la $i$-ème variable de l'environnement
+(en comptant comme 0 la variable la plus récemment ajoutée).
+Ainsi le code ci-dessus deviendra:
+\begin{verbatim}
+  let([2],
+      let([lambda(app(app(var(Np1), var(0)), var(2)))],
+          let([lambda(app(app(var(Nc), 3), var(0)))],
+              app(app(var(Np), var(2)), ...))))
+\end{verbatim}
+où \texttt{Np1}, \texttt{Nc}, et \texttt{Np2} sont les entiers correspondants
+à la position (ou la profondeur, selon comment on le regarde) respective de
+\id{cons}, et $+$ dans l'environnement.  Notez que \texttt{Np1} et
+\texttt{Np2} font référence à $+$ mais ne seront pas égaux; plus
+spécifiquement, $\texttt{Np2} = 1+\texttt{Np1}$ vu que l'environnement au
+deuxième usage du $+$ contient une variable supplémentaire (le 3$^e$ $x$)
+par rapport à l'environnement du premier usage du $+$.
+
+\subsection{Inférence de types}
+
+\newcommand \CheckKind [1] {\vdash #1}
+\newcommand \CheckType [2][\Gamma] {#1 \vdash #2 ~:~}
+\newcommand \InferType [2][\Gamma] {#1 \vdash #2 ~:~}
+\newcommand \BothType [2][\Gamma] {#1 \vdash #2 ~:~}
+\newcommand \Axiom [2] { \mbox{}\hspace{10pt}\nolinebreak\ensuremath{\displaystyle
+    \frac{#1}{#2}}\nolinebreak\hspace{10pt}\mbox{} \medskip}
+\newcommand \HA {\hspace{13pt}}
+\renewcommand \: {\!:\!}
+
+\begin{figure}
+  \begin{minipage}{\columnwidth}
+    \noindent \centering
+
+    \Axiom{}{\InferType{n}{\kw{int}}}
+    \Axiom{x\:\tau \in \Gamma}{\InferType{x}{\tau}}
+    \Axiom{\InferType{e}{\kw{bool}}
+           \HA \CheckType{e_t}{\tau} \HA
+           \CheckType{e_e}{\tau}}
+          {\CheckType{\kw{if}(e,e_t,e_e)} {\tau}} \bigskip
+    \Axiom{\CheckType[\Gamma,x\:\tau_1]{e}{\tau_2}}
+          {\CheckType{\kw{lambda}(x,e)}{\tau_1\to\tau_2}}
+    \Axiom{\InferType{e_1}{\tau_1\to\tau_2}
+           \HA
+           \CheckType{e_2}{\tau_1}}
+          {\InferType{\kw{app}(e_1,e_2)}{\tau_2}}
+    \Axiom{\CheckType{e}{\tau}}
+          {\InferType{(e : \tau)}{\tau}}
+    \Axiom{x\:\tau \in \Gamma}
+          {\CheckType{{?}}{\tau}}
+    \Axiom{
+        \InferType[\Gamma,x_1\:\tau_1]{e_1}{\tau_1} \HA
+        \InferType[\Gamma,x_1\:\tau_1]{e}{\tau}
+    } {
+      \InferType{\kw{let}([x_1=e_1],e)}{\tau}
+    }
+    \mbox{}
+  \end{minipage}
+  \caption{Règles de typage simple}
+  \label{fig:typing}
+\end{figure}
+
+H2035 utilise un typage statique similaire à celui de Haskell, où les types
+sont inférés.  Dans un premier temps, je vous recommande de faire une
+inférence simple, sans polymorphisme (ni récursion mutuelle), puis dans un
+deuxième temps vous ajouterez ce qu'on appelle le \emph{let-polymorphisme},
+en utilisant l'algorithme d'inférence de types de Hindley-Milner.
+
+Les règles de typage sans polymorphisme sont données en
+Fig.~\ref{fig:typing}.  Dans ces règles, le jugement $\InferType e \tau$
+signifie que l'expression $e$ a type $\tau$ dans un contexte $\Gamma$ qui
+donne le type de chaque variable dont la portée couvre $e$.
+
+Comme vous pouvez le voir, la règle du \kw{let} n'accepte pas que le
+\kw{let} déclare simultanément plus qu'un identificateur, et
+n'autorise donc pas la récursion mutuelle.  Vous pouvez aussi remarquer que
+ces règles présument que le sucre syntaxique a déjà été éliminé, c'est
+pourquoi il n'y a pas de règle par exemple pour la forme $x(e_1,..,e_n)$.
+
+\subsubsection{Récursion mutuelle et inférence du polymorphisme}
+
+\begin{figure}
+  \begin{minipage}{\columnwidth}
+    \noindent \centering
+    \Axiom{}{\tau \subset \tau}
+    \Axiom{\sigma[\tau'/\alpha] \subset \tau}
+          {\kw{forall}(\alpha,\sigma) \subset \tau}
+    \Axiom{x\:\sigma \in \Gamma
+           \HA  \sigma \subset \tau}
+          {\InferType{x}{\tau_2}}
+
+    \Axiom{
+      \begin{array}{c}
+        \forall i \HA
+        \InferType[\Gamma,x_1\:\tau_1,...,x_n\:\tau_n]{e_i}{\tau_i}
+        \HA \sigma_i = \kw{gen}(\Gamma,\tau_i) \\
+        \InferType[\Gamma,x_1\:\sigma_1,...,x_n\:\sigma_n]{e}{\tau}
+      \end{array}
+    } {
+      \InferType{\kw{let}([x_1=e_1,...,x_n=e_n],e)}{\tau}
+    }
+
+    \Axiom{\{t_1,...,t_n\} = \kw{fv}(\tau) - \kw{fv}(\Gamma)}
+          {\kw{gen}(\Gamma,\tau) = \kw{forall}(t_1,...\kw{forall}(t_n,\tau)..)}
+    \mbox{}
+  \end{minipage}
+  \caption{Règles additionnelles de typage polymorphe}
+  \label{fig:typing-poly}
+\end{figure}
+
+La deuxième étape introduit le let-polymorphisme de Hindley-Milner qui va
+donc automatiquement inférer quand une définition est polymorphe, ainsi que
+spécialiser automatiquement une définition polymorphe chaque fois qu'elle
+est utilisée.  Cette étape ajoute aussi les définitions récursives.
+
+Les nouvelles règles de typage de la deuxième étape sont données en
+Fig.~\ref{fig:typing-poly}.  Ces règles remplacent la règle de typage des
+variables, et la règle de typage du \kw{let}.  Dans ces nouvelles règles,
+$\sigma$ est utilisé pour indiquer un type qui peut être \emph{polymorphe}
+(i.e. avec un \kw{forall}), alors que $\tau$ représente un type
+\emph{monomorphe} (i.e. sans \kw{forall}).
+
+Dans la règle de typage des variable, le $\sigma \subset \tau$ indique que
+$\tau$ est une instance de $\sigma$, par exemple, $\sigma$ pourrait être
+$\kw{forall}(\alpha,\alpha\to\alpha))$, et $\tau$ pourrait être
+$\kw{int}\to\kw{int}$ qui est l'instance correspondant au choix de \kw{int}
+pour $\alpha$.  C'est donc dans cette règle que les \kw{forall} sont
+\emph{éliminés}.
+
+La règle de typage du \kw{let} utilise une fonction auxiliaire \kw{gen} qui
+va \emph{généraliser} une définition, en découvrant son polymorphisme.
+Cela fonctionne simplement en regardant dans le type $\tau$ de la définition
+quelles sont les variables non-instanciées (ou libres: \kw{fv} veut dire
+``free variables''): celles-ci peuvent être généralisées (sauf si elles
+apparaissent aussi dans le contexte $\Gamma$), donnant alors un
+type polymorphe.  C'est donc cette règle qui \emph{introduit}
+le \kw{forall}.
+
+Cette nouvelle règle du \kw{let} autorise non seulement l'introduction de
+plusieurs définitions simultanées ($x_1...x_n$), mais autorise aussi la
+récursion mutuelle.  Cela se voit dans le fait que $e_i$ est typé dans un
+environnement qui n'est pas limité à $\Gamma$ mais inclus aussi les
+identificateurs $x_1...x_n$, ce qui autorise donc $e_i$ à faire des
+références récursives non seulement à $x_i$ mais aussi à n'importe lequel
+des autres identificateurs définis par ce \kw{let}.
+
+Détail important pour la règle du \kw{let}: si on a par exemple les
+déclarations $y = x, x = 1$ et on infère le type de $y$ avant d'inférer
+le type de $x$, le type de $y$ sera incomplet tant que le type de $x$ ne
+sera pas inféré.  Pour cette raison, il est important d'inférer le type de
+tous les $e_i$ \emph{avant} de les passer à \kw{gen}, faute de quoi,
+\kw{gen} risque de penser que $y$ est polymorphe.
+
+\section{Votre travail}
+
+Votre travail consiste à compléter le code des prédicats \id{elaborate} et
+\id{eval}.  Le code qui vous est fourni contient déjà un squelette de ces
+prédicats ainsi que quelques autres prédicats qui vous seront utiles
+principalement pour la deuxième phase:
+\begin{itemize}
+\item \id{instantiate}: implémente la règle $\sigma \subset tau$.
+\item \id{freelvars}: implémente la fonction \kw{fv}.
+\item \id{generalize}: fait le travail de \kw{gen}.
+\end{itemize}
+
+\section{Remise}
+
+Vous devez remettre deux fichiers, \texttt{h2035.pl} et
+\texttt{rapport.tex}.  Ces fichiers seront remis sous forme électronique,
+par l'intermédiare de Moodle/StudiUM.
+
+\section{Détails}
+
+La note est basée d'une part sur des tests automatiques, d'autre part sur la
+lecture du code, ainsi que sur le rapport.  Le critère le plus important, et
+que votre code doit se comporter de manière correcte.  En règle générale,
+une solution simple est plus souvent correcte qu'une solution complexe.
+Ensuite, vient la qualité du code: plus c'est simple, mieux c'est.
+S'il y a beaucoup de commentaires, c'est généralement un symptôme que le
+code n'est pas clair; mais bien sûr, sans commentaires le code (même simple)
+et souvent incompréhensible.  L'efficacité de votre code est sans
+importance, sauf s'il utilise un algorithme vraiment particulièrement
+ridiculement inefficace.
+
+Les points seront répartis comme suit: 25\% sur le rapport, 25\% sur les
+tests automatiques, 25\% sur le code de l'élaboration, et 25\% sur le
+code de l'évaluateur.
+
+\begin{itemize}
+\item Le code ne doit en aucun cas dépasser 80 colonnes.
+\item Vérifiez la page web du cours, pour d'éventuels errata, et d'autres
+  indications supplémentaires.
+\item Tout usage de matériel (code ou texte) emprunté à quelqu'un d'autre
+  (trouvé sur le web, ...) doit être dûment mentionné, sans quoi cela sera
+  considéré comme du plagiat.
+\end{itemize}
+
+
+\end{document}
