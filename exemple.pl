@@ -48,3 +48,24 @@ let(f(x) = x+1, f(3))
 
 let([x = 1, x = lambda(a, a + 1)], (3 + x(x)))	
 %let([1, lambda(app(app(var(3), var(0)), 1))], app(app(var(2), 3), app(var(0), var(1))))
+
+lambda(x, x)
+%lambda(var(0))
+%forall(t, t -> t)
+
+nil : list(bool)
+%var(3)
+%list(bool)
+
++(5)
+%app(var(0), 5)
+%int -> int
+
+cons(1,nil)
+%app(app(var(4), 1), var(3))
+%list(int)
+
+?(1,nil)
+%app(app(var(4), 1), var(3)) (identique)
+%list(int)
+
