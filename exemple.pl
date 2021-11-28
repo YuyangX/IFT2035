@@ -30,7 +30,7 @@
 %%         T, V).
 4
 
-%Exemple d'élaboration "/$%?&*(***&)&&&()()))((()()))_+_"¦thgfdarweqweee§§§§§aaaaaaasdfghjkzxcvbnµµµµµ­­­qqq
+%Exemple d'élaboration:
 1 + 2	
 %app(app(var(0), 1), 2)
 
