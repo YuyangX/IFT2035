@@ -75,38 +75,124 @@ wf_args([Arg|Args]) :- wf_args(Args), identifier(Arg).
 %% Note: Le cut est utilisé pour éviter de tomber dans la dernière clause
 %% (qui signale un message d'erreur) en cas d'erreur de type.
 elaborate(_, E, _, _) :-
-    var(E), !,
-    debug_print(elaborate_nonclos(E)), fail. % Si l'expression est une variable prolog, on va echouer car on ne peut pas elaborer une expression non définie
+    var(E), !, 
+    debug_print(elaborate_nonclos(E)), fail.
 elaborate(_, N, T, N) :- number(N), !, T = int.
 elaborate(Env, lambda(X,E), T, lambda(DE)) :-
     !, elaborate([(X,T1)|Env], E, T2, DE), T = (T1 -> T2).
-elaborate(Env, app(F, Arg), T, app(DF, DArg)) :- 
+
+elaborate(Env, app(F, Arg), T, app(DF, DArg)) :-
     !, elaborate(Env, F, (T1 -> T2), DF),
+    %!, elaborate(Env, F, T3, DF), write(T3),
     elaborate(Env, Arg, T1, DArg), T = T2.
+
 elaborate(Env, if(E1, E2, E3), T, if(DE1, DE2, DE3)) :- 
     !, elaborate(Env, E1, bool, DE1), elaborate(Env, E2, T1, DE2), 
     elaborate(Env, E3, T1, DE3), T = T1.
+
 elaborate(Env, +(N1, N2), T, app(app(var(Idx), DN1), DN2)) :-
-    !, elaborate(Env, N1, _, DN1), elaborate(Env, N2, _, DN2),
+    !, elaborate(Env, N1, int, DN1), elaborate(Env, N2, int, DN2),
     T = int, find_index(Env, (+), Idx).
+
 elaborate(Env, cons(Fst, Res), T, app(app(var(Idx), DFst), DRes)) :-
     !, elaborate(Env, Fst, T1, DFst), elaborate(Env, Res, _, DRes),
-    T = [T1], find_index(Env, cons, Idx).
+    T = list(T1), find_index(Env, cons, Idx).
 
+elaborate(Env, empty(List), bool, app(var(Idx), Dlist)) :- 
+    !, elaborate(Env, List, _, Dlist), find_index(Env, empty, Idx).
 
-%%elaborate(Env, ,)
+elaborate(Env, car(cons(Fst, Res)), T, app(var(Idx), Dlist)) :-
+    !, elaborate(Env, cons(Fst, Res), _, Dlist), elaborate(Env, Fst, T, _),
+    find_index(Env, car, Idx).
+
+elaborate(Env, cdr(cons(Fst, Res)), T, app(var(Idx), Dlist)) :-
+    !, elaborate(Env, cons(Fst, Res), _, Dlist), elaborate(Env, Res, T, _),
+    find_index(Env, cdr, Idx).
+
+%%%%%%%%%%%%%% elaborates pour "let" sans récursion mutuelle %%%%%%%%%%%%%%%%%
+%% Elabore le "let" sans sucre syntaxique, "let([decl], e)".
+elaborate(Env, let([Identificateur = Body], Exp), T, let([DBody], DExp)) :- 
+    !, Identificateur =.. List, length(List, Len),
+    % Si l'identificateur est de forme "name = body"
+    Len = 1 -> 
+    elaborate([(Identificateur, T1)|Env], Body, T1, DBody), write(T1), write(Body),
+    elaborate([(Identificateur, T1)|Env], Exp, T, DExp), !;
+    % Si l'identificateur est de forme "name(var1, ..., varn) = body"
+    Identificateur =.. List, List = [Fst|Res],
+    eliminate_syntactic_sugar_1(Res, Body, RawBody),    
+    elaborate([(Fst, T2)|Env], RawBody, T2, DBody), write(T2),
+    elaborate([(Fst, T2)|Env], Exp, T, DExp), !.
+
+%% Elabore le "let" avec le sucre syntaxique "let(decl, e)".
+elaborate(Env, let(Identificateur = Body, Exp), T, let([DBody], DExp)) :- 
+    !, elaborate(Env, let([Identificateur = Body], Exp), T, let([DBody], DExp)).
+
+%% Elabore le "let" avec le sucre syntaxique "let(d1, ..., dn, e)".
+elaborate(Env, Lets, T, DLets) :-
+    Lets =.. [Fst|Res], Fst = let, !,
+    eliminate_syntactic_sugar_3(Res, RawLet),
+    elaborate(Env, RawLet, T, DLets).
+%%%%%%%%%%%% Fin des elaborates pour "let" sans récursion mutuelle %%%%%%%%%%%
+
+%% Renvoie une variable avec indice de De Bruijn.
+elaborate(Env, Var, T, var(Idx)) :- 
+    % Identifie si Var est bien une seule variable.
+    Var =.. List, length(List, Len), Len = 1, !,
+    find_var(Env, Var, T, Idx), write(1), write(Idx+8), write(T).
+    %find_index(Env, Var, Idx), find_type(Env, Var, T).
+
+%% Elimine le sucre syntaxique de l'appel de fonction, qui a la forme
+%% f(e1, ..., en), et renvoie la forme correspondante sans identificateur.
+elaborate(Env, CallFonc, T, DCallFonc) :-
+    % S'assure que ce ne soit pas un "let". 
+    CallFonc =.. [Fst|Res], \+(Fst = let), !, 
+    eliminate_syntactic_sugar_2(Fst, Res, RawCallFonc), 
+    elaborate(Env, RawCallFonc, T, DCallFonc).
 
 %% ¡¡ REMPLIR ICI !!
 elaborate(_, E, _, _) :-
     debug_print(elab_unknown(E)), fail.
 
-%find(Opr, Idx) :- tenv0(Env), find_index(Env, Opr, Idx).
+%%%%%%%%%%%%%%%%%%%%%%%%%%% Règles auxiliaires %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+find_var([(Ele, Type)|_], Ele, Type, 0) :- !.
+find_var([_|ResEnv], Ele, Type, Idx) :-
+    find_var(ResEnv, Ele, Type, Idx1), Idx is Idx1 + 1. 
 
 %% find_index(+Env, +Ele, -Idx)
 %% Renvoie la position de l'élément dans l'environnement env0.
 find_index([(Ele, _)|_], Ele, 0) :- !.
 find_index([_|ResEnv], Ele, Idx) :- 
     find_index(ResEnv, Ele, Idx1), Idx is Idx1 + 1.
+
+%% find_type(+Env, +Ele, -Type)
+%% Renvoie le type de l'élément dans l'environnement env0.
+find_type([(Ele, Type)|_], Ele, Type) :- !.
+find_type([_|ResEnv], Ele, Type) :- find_type(ResEnv, Ele, Type).
+
+%% eliminate_syntactic_sugar_1(+ArgList, +Body, -RawBody)
+%% Eliminer le sucre syntaxique de la définition de fonction, qui a
+%% la forme f(x1, ..., xn).
+eliminate_syntactic_sugar_1([FstArg|[]], Body, RawBody) :-
+    RawBody = lambda(FstArg, Body).
+eliminate_syntactic_sugar_1([FstArg|ResArgs], Body, RawBody) :-
+    RawBody = lambda(FstArg, Res), eliminate_syntactic_sugar_1(ResArgs, Body, Res).
+
+%% eliminate_syntactic_sugar_2(+Name, +ActualArgs, -RawExp)
+%% Eliminer le sucre syntaxique de l'appel de fonction, qui a 
+%% la forme f(e1, ..., en).
+eliminate_syntactic_sugar_2(Name, [FstArg|[]], RawExp) :- 
+    RawExp = app(Name, FstArg).
+eliminate_syntactic_sugar_2(Name, [FstArg|ResArgs], RawExp) :- 
+    eliminate_syntactic_sugar_2(Name, [FstArg], Res), 
+    eliminate_syntactic_sugar_2(Res, ResArgs, RawExp).    
+
+%% eliminate_syntactic_sugar_3(+LetElem, -RawLet)
+%% Eliminer le sucre syntaxique de "let", qui a la forme let(d1, ..., dn, e).
+eliminate_syntactic_sugar_3([FstLet|ExpList], RawLet) :-
+    length(ExpList, Len), Len = 1, !, ExpList = [Exp], RawLet = let(FstLet, Exp).
+eliminate_syntactic_sugar_3([FstLet|ResLets], RawLet) :-
+    RawLet = let(FstLet, Res), eliminate_syntactic_sugar_3(ResLets, Res).
+%%%%%%%%%%%%%%%%%%%%%%%%% Fin de règles auxiliaires %%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Ci-dessous, quelques prédicats qui vous seront utiles:
 %% - instantiate: correspond à la règle "σ ⊂ τ" de la donnée.
@@ -189,10 +275,15 @@ eval(_, E, _) :-
 eval(_, N, N) :- number(N), !.
 eval(Env, var(Idx), V) :- !, nth_elem(Idx, Env, V).  % Env est juste une liste de valeurs plutot qu'une liste de paires
 eval(Env, lambda(E), closure(Env, E)) :- !.
-eval(Env, app(E1, E2), V) :-
+eval(Env, app(E1, E2), V) :- 
     !, eval(Env, E1, V1),
     eval(Env, E2, V2),
     apply(V1, V2, V).
+eval(Env, if(E1, E2, E3), V) :-
+    !, eval(Env, E1, true) -> eval(Env, E2, V); eval(Env, E3, V).
+eval(Env, let([Exp], Body), V) :-
+    !, eval([_|Env], Exp, DExp), eval([DExp|Env], Body, V).
+
 %% ¡¡ REMPLIR ICI !!
 eval(_, E, _) :-
     debug_print(eval_unknown(E)), fail.
@@ -207,7 +298,7 @@ builtin((+), N1, builtin(+(N1))).
 builtin(+(N1), N2, N) :- N is N1 + N2.
 builtin(cons, X, builtin(cons(X))).
 builtin(cons(X), XS, [X|XS]).
-builtin(empty, X, Res) :- X = [] -> Res = true; Res = false.  % Il y a pas de backtracking si on utilise ->
+builtin(empty, X, Res) :- X = [] -> Res = true; Res = false.
 builtin(car, [X|_], X).
 builtin(cdr, [_|XS], XS).
 builtin(cdr, [], []).
@@ -278,8 +369,3 @@ runeval(E, T, V) :- tenv0(TEnv), elaborate(TEnv, E, T, DE),
 %%             length(?(42,?(41,?(40,nil))))
 %%             + length(cons(true,nil))),
 %%         T, V).
-
-test_if(N,L):-
-    N = 2 -> L = gg;
-    N = 3 -> L = saobi;
-    L = fuck .
