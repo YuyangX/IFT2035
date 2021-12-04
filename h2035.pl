@@ -110,7 +110,8 @@ elaborate(Env, cdr(cons(Fst, Res)), T, app(var(Idx), Dlist)) :-
     find_index(Env, cdr, Idx).
 
 %%%%%%%%%%%%%% elaborates pour "let" sans récursion mutuelle %%%%%%%%%%%%%%%%%
-%% Elabore le "let" sans sucre syntaxique, "let([decl], e)".
+%% Elabore le "let" sans sucre syntaxique, "let([decl], e)", en utilisant 
+%% la règle "eliminate_syntactic_sugar_1".
 elaborate(Env, let([Identificateur = Body], Exp), T, let([DBody], DExp)) :- 
     !, Identificateur =.. List, length(List, Len),
     % Si l'identificateur est de forme "name = body"
@@ -127,7 +128,8 @@ elaborate(Env, let([Identificateur = Body], Exp), T, let([DBody], DExp)) :-
 elaborate(Env, let(Identificateur = Body, Exp), T, let([DBody], DExp)) :- 
     !, elaborate(Env, let([Identificateur = Body], Exp), T, let([DBody], DExp)).
 
-%% Elabore le "let" avec le sucre syntaxique "let(d1, ..., dn, e)".
+%% Elabore le "let" avec le sucre syntaxique "let(d1, ..., dn, e)", en utilisant 
+%% la règle "eliminate_syntactic_sugar_3".
 elaborate(Env, Lets, T, DLets) :-
     Lets =.. [Fst|Res], Fst = let, !,
     eliminate_syntactic_sugar_3(Res, RawLet),
@@ -142,7 +144,8 @@ elaborate(Env, Var, T, var(Idx)) :-
     %find_index(Env, Var, Idx), find_type(Env, Var, T).
 
 %% Elimine le sucre syntaxique de l'appel de fonction, qui a la forme
-%% f(e1, ..., en), et renvoie la forme correspondante sans identificateur.
+%% f(e1, ..., en), et renvoie la forme correspondante sans identificateur,
+%% en utilisant la règle "eliminate_syntactic_sugar_2".
 elaborate(Env, CallFonc, T, DCallFonc) :-
     % S'assure que ce ne soit pas un "let". 
     CallFonc =.. [Fst|Res], \+(Fst = let), !, 
