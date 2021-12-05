@@ -90,10 +90,8 @@ elaborate(Env, if(E1, E2, E3), T, if(DE1, DE2, DE3)) :-
     !, elaborate(Env, E1, bool, DE1), elaborate(Env, E2, T1, DE2), 
     elaborate(Env, E3, T1, DE3), T = T1.
 
-elaborate(Env, +(N1, N2), T, app(app(var(Idx), DN1), DN2)) :-
-    !, T1 = int, T2 = int,
-    T = int,
-    elaborate(Env, N1, int, DN1), elaborate(Env, N2, int, DN2),
+elaborate(Env, +(N1, N2), int, app(app(var(Idx), DN1), DN2)) :-
+    !, elaborate(Env, N1, int, DN1), elaborate(Env, N2, int, DN2),
     find_index(Env, (+), Idx).
 
 elaborate(Env, cons(Fst, Res), T, app(app(var(Idx), DFst), DRes)) :-
@@ -148,7 +146,7 @@ elaborate(Env, Var, T, var(Idx)) :-
 %% Elimine le sucre syntaxique de l'appel de fonction, qui a la forme
 %% f(e1, ..., en), et renvoie la forme correspondante sans identificateur,
 %% en utilisant la règle "eliminate_syntactic_sugar_2".
-elaborate(Env, CallFonc, T, DCallFonc) :- write(111),
+elaborate(Env, CallFonc, T, DCallFonc) :-
     % S'assure que ce ne soit pas un "let". 
     CallFonc =.. [Fst|Res], \+(Fst = let), !, 
     eliminate_syntactic_sugar_2(Fst, Res, RawCallFonc), 
