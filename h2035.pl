@@ -78,8 +78,8 @@ elaborate(_, E, _, _) :-
     var(E), !, 
     debug_print(elaborate_nonclos(E)), fail.
 elaborate(_, N, T, N) :- number(N), !, T = int.
-elaborate(Env, lambda(X,E), T, lambda(DE)) :-
-    !, elaborate([(X,T1)|Env], E, T2, DE), T = (T1 -> T2).
+elaborate(Env, lambda(X,E), (T1 -> T2), lambda(DE)) :-
+    !, elaborate([(X,T1)|Env], E, T2, DE).
 
 elaborate(Env, app(F, Arg), T, app(DF, DArg)) :-
     !, elaborate(Env, F, (T1 -> T2), DF),
@@ -91,8 +91,10 @@ elaborate(Env, if(E1, E2, E3), T, if(DE1, DE2, DE3)) :-
     elaborate(Env, E3, T1, DE3), T = T1.
 
 elaborate(Env, +(N1, N2), T, app(app(var(Idx), DN1), DN2)) :-
-    !, elaborate(Env, N1, int, DN1), elaborate(Env, N2, int, DN2),
-    T = int, find_index(Env, (+), Idx).
+    !, T1 = int, T2 = int,
+    T = int,
+    elaborate(Env, N1, int, DN1), elaborate(Env, N2, int, DN2),
+    find_index(Env, (+), Idx).
 
 elaborate(Env, cons(Fst, Res), T, app(app(var(Idx), DFst), DRes)) :-
     !, elaborate(Env, Fst, T1, DFst), elaborate(Env, Res, _, DRes),
@@ -101,7 +103,7 @@ elaborate(Env, cons(Fst, Res), T, app(app(var(Idx), DFst), DRes)) :-
 elaborate(Env, empty(List), bool, app(var(Idx), Dlist)) :- 
     !, elaborate(Env, List, _, Dlist), find_index(Env, empty, Idx).
 
-elaborate(Env, car(cons(Fst, Res)), T, app(var(Idx), Dlist)) :-
+elaborate(Env, car(cons(Fst, Res)), T, app(var(Idx), Dlist)) :- 
     !, elaborate(Env, cons(Fst, Res), _, Dlist), elaborate(Env, Fst, T, _),
     find_index(Env, car, Idx).
 
@@ -116,12 +118,12 @@ elaborate(Env, let([Identificateur = Body], Exp), T, let([DBody], DExp)) :-
     !, Identificateur =.. List, length(List, Len),
     % Si l'identificateur est de forme "name = body"
     Len = 1 -> 
-    elaborate([(Identificateur, T1)|Env], Body, T1, DBody), write(T1), write(Body),
+    elaborate([(Identificateur, T1)|Env], Body, T1, DBody), %write(T1), write(Body),
     elaborate([(Identificateur, T1)|Env], Exp, T, DExp), !;
     % Si l'identificateur est de forme "name(var1, ..., varn) = body"
     Identificateur =.. List, List = [Fst|Res],
     eliminate_syntactic_sugar_1(Res, Body, RawBody),    
-    elaborate([(Fst, T2)|Env], RawBody, T2, DBody), write(T2),
+    elaborate([(Fst, T2)|Env], RawBody, T2, DBody), %write(T2),
     elaborate([(Fst, T2)|Env], Exp, T, DExp), !.
 
 %% Elabore le "let" avec le sucre syntaxique "let(decl, e)".
@@ -138,15 +140,15 @@ elaborate(Env, Lets, T, DLets) :-
 
 %% Renvoie une variable avec indice de De Bruijn.
 elaborate(Env, Var, T, var(Idx)) :- 
-    % Identifie si Var est bien une seule variable.
+    % Identifie si Var est bien une seule variable, pas de forme f(x1, ..., xn).
     Var =.. List, length(List, Len), Len = 1, !,
-    find_var(Env, Var, T, Idx), write(1), write(Idx+8), write(T).
+    find_var(Env, Var, T, Idx).
     %find_index(Env, Var, Idx), find_type(Env, Var, T).
 
 %% Elimine le sucre syntaxique de l'appel de fonction, qui a la forme
 %% f(e1, ..., en), et renvoie la forme correspondante sans identificateur,
 %% en utilisant la règle "eliminate_syntactic_sugar_2".
-elaborate(Env, CallFonc, T, DCallFonc) :-
+elaborate(Env, CallFonc, T, DCallFonc) :- write(111),
     % S'assure que ce ne soit pas un "let". 
     CallFonc =.. [Fst|Res], \+(Fst = let), !, 
     eliminate_syntactic_sugar_2(Fst, Res, RawCallFonc), 
@@ -156,7 +158,7 @@ elaborate(Env, CallFonc, T, DCallFonc) :-
 elaborate(_, E, _, _) :-
     debug_print(elab_unknown(E)), fail.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%% Règles auxiliaires %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%% Début de règles auxiliaires %%%%%%%%%%%%%%%%%%%%%%%%%%
 find_var([(Ele, Type)|_], Ele, Type, 0) :- !.
 find_var([_|ResEnv], Ele, Type, Idx) :-
     find_var(ResEnv, Ele, Type, Idx1), Idx is Idx1 + 1. 
@@ -169,8 +171,8 @@ find_index([_|ResEnv], Ele, Idx) :-
 
 %% find_type(+Env, +Ele, -Type)
 %% Renvoie le type de l'élément dans l'environnement env0.
-find_type([(Ele, Type)|_], Ele, Type) :- !.
-find_type([_|ResEnv], Ele, Type) :- find_type(ResEnv, Ele, Type).
+%% find_type([(Ele, Type)|_], Ele, Type) :- !.
+%% find_type([_|ResEnv], Ele, Type) :- find_type(ResEnv, Ele, Type).
 
 %% eliminate_syntactic_sugar_1(+ArgList, +Body, -RawBody)
 %% Eliminer le sucre syntaxique de la définition de fonction, qui a
