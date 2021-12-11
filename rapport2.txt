@@ -1,0 +1,85 @@
+Compréhension générale:
+    Surcharge:
+        Par ce devoir, nous avons vu d'une différent point de vue le concept "surcharge". Quand nous faisons le cours IFT1025,
+        le prof a montré la "surcharge" de Java: il est possible de définir plusieurs méthodes avec un même nom mais avec différentes
+        signatures. Ici, la "surcharge" veut dire qu'on pourrait avoir plusieurs définitions actives pour un même identificateur.
+        A cause de l'existance de cette "surcharge", la façon de laquelle H2035 trouve une variable sur son occurrence est de 
+        comparer son type en plus du nom avec celui des variables dans l'environnement.
+
+    Indices de De Bruijn:
+        Une autre nouvelle notion nous a été menée, c'est la "indice de De Bruijn".
+        Conduits par la curiosité, nous sommes allés chercher plus de détails sur ça. Cet indice a été créé pour dénoter des termes
+        dans le lambda calcul. Au lieu de spécifier le nom des termes, on pourrait plutôt utiliser un nombre pour indiquer l'occurrence 
+        d'une variable. Le nombre s'exprime la position d'une variable dans l'environnement au moment de l'usage de cette variable.
+
+Connaissance requise par rapport au Prolog:
+    Pendant que nous complètent le langage du futur "H2035" en utilisant "Prolog" que nous avons vu au cours, nous avons
+    fouillé pas mal de choses intéressantes par rapport au Prolog, y compris son mécanisme d'exécution. En même temps,
+    nous nous sommes fait maîtriser un peu plus ce langage de programmation.
+    1. Dans un programme de Prolog, nous utilisent pas mal de "pattern matching" pour construire notre codes. Ce qui est 
+    vraiment similaire au Haskell. Mais une différences entre eux est que nous appellent les codes "règle" en Prolog
+    plutôt que "fonction".
+    2. Le mécanisme d'exécution principal de Prolog est ce qu'on appelle "Unification". Lorsqu'on lance une requête, Prolog
+    va unifie les variables dans la requête avec des instances trouvées pendant son exécution, et après nous donne un résultat.
+    Un avantage de ce mécanisme est qu'on puisse simplier nos codes. Dans des langages de programmation impératifs tel que C,
+    Java, Python, il faut demande à l'ordinateur ce qu'il doit faire étape par étape. Par contre, en Prolog, il suffit de 
+    préciser, dans nos codes, la logique que l'ordinateur doit suivre.
+    3. Nous avons appris de nouvelles grammaires par rapport au Prolog pendant ce devoir. Par exemple, pour réaliser "if else",
+    on doit utiliser "Condition1 -> E1; Condition2 -> E2 ...". L'opérateur "=.." peut déconstruire une règle en une liste, comme
+    "f(x1, ..., xn) =.. [f, x1, ..., xn]".
+    4. En Prolog, plusieurs opérateur peuvent être utilisés de plus d'une manière. Soit s'écrire l'expression infixe, soit la 
+    forme prédicat. Par exemple, "+(1, 2)" est équivalent à "1 + 2".
+
+Problèmes rencontrés:
+    1. Quand nous concevions le "if" de la phase élaboration, nous avons rencontré un problème par rapport au type
+    de "if". Vu qu'il y a deux branches dans un "if", laquelle devrions-nous prendre comme le type de ce "if"?
+    Apres avoir revu les régles de typage dans la figure 1, nous avons trouvé avec surprise qu'il était écrit
+                                    ...  Γ⊢et :τ  Γ⊢ee :τ 
+                                    ----------------------
+                                             ...            .
+    Ce qui voulait dire que deux branches d'un même "if" sont de même type τ dans un contexte Γ. Mais à ce moment-là,
+    un autre doute s'est pruduit dans ma tête: pourquoi devons-nous considérer seulement les cas où deux branches d'un "if"
+    sont de même type, est-ce parce que le prof voulait alléger la difficulté de ce devoir? Pour être sûr, j'ai posé, 
+    par la suite, cette question sur le forum. Le démonstrateur Maxim Bernard a bien dissipé mon doute. En fait, "h2035" 
+    est un langage de programmation statiquement typé tel que Java, C. Pour un langage de programmation de typage statique, 
+    il faut que ses branches de "if" soient de même type, parce que le compilateur doit déterminer le type de toutes les 
+    données pendant la compilation. Alors, si deux branches ne sont pas de même type, le compilateur ne pourra pas savoir 
+    le type du "if" et il signalera une erreur et interrompra la compilation.
+
+    2. Au début, Nous avons mal conçu la règle pour trouver l'index des variables dans l'environnement. La règle que nous
+    avons naïvement conçu au début est la suivante:
+                %% Renvoie une variable avec indice de De Bruijn.
+                elaborate(Env, Var, T, var(Idx)) :- 
+                    % Identifie si Var est bien une seule variable.
+                    Var =.. List, length(List, Len), Len = 1, !,
+                    find_index(Env, Var, Idx), find_type(Env, Var, T).
+                
+    où la règle "find_index" est la suivante:
+                %% find_index(+Env, +Ele, -Idx)
+                %% Renvoie la position de l'élément dans l'environnement env0.
+                find_index([(Ele, _)|_], Ele, 0) :- !.
+                find_index([_|ResEnv], Ele, Idx) :- 
+                    find_index(ResEnv, Ele, Idx1), Idx is Idx1 + 1.
+
+    Ces règles nous ont permit de correctement trouver l'index des variables dans un environnement où toutes les variables 
+    étaient de différents noms. Mais des erreurs se sont produites quand nous déclarerions plusieurs variables ayant le même nom. 
+    Par exemple, quand nous exécutions cette requête:
+        runelab(let(x=2, x(i)=i+1, x(x)), T, V).
+    ça nous a donné pour V un résultat "let([2], let([lambda(app(app(var(3), var(0)), 1))], app(var(0), var(0))))". Cependant, le
+    résultat attendu devrait être "let([2], let([lambda(app(app(var(3), var(0)), 1))], app(var(0), var(1))))". (Les deux résultats
+    se diffèrent de l'index du x aux parenthèses de x(x), l'un est 0 et l'autre est 1.)
+    Ce qui a causé cette erreur est que nous avions ignoré l'étape de vérifier le type des vairables cherchées: "find_index" 
+    ne cherche l'index d'une certaine variable que selon son nom, sans considérer son type. Néanmoins, dans "x(x)", le premier 
+    x devrait être de type "int -> int" tandis que le deuxième devrait avoir un type "int". Mais comme nous n'avions pas comparé 
+    le type des x's cherchés avec le type des x's déjà existant dans l'environnement, les index trouvés pour les deux x's de x(x) 
+    sont identiques (l'index de première variable ayant le nom "x" dans l'environnement). Ainsi, les résultats après "elaborate" 
+    pour les deux x's sont tous var(0). Après avoir trouvé la source de cette erreur, nous avons par la suite rajouté une nouvelle 
+    règle:
+                %% find_var(+Env, +Ele, +Type, -Idx)
+                %% Renvoie la position de l'élément ayant le même type que Type dans env0.
+                    find_var([(Ele, Type)|_], Ele, Type, 0) :- !.
+                    find_var([_|ResEnv], Ele, Type, Idx) :-
+                        find_var(ResEnv, Ele, Type, Idx1), Idx is Idx1 + 1. 
+    et avons remplacé le "find_index" dans le "elaborate(Env, Var, T, var(Idx))" par cette nouvelle règle. Cette nouvelle règle 
+    permet de comparer le type lorsque chercher des variables. Ainsi, nous pourrons correctement trouver une variable "x" selon 
+    son type même s'il y a plusieurs variables de même nom dans l'environnement.  
