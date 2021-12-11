@@ -76,3 +76,7 @@ let([length = lambda(x, if(empty(x), 0, 1 + length(cdr(x))))],
 %            app(app(var(1), app(var(0), app(app(var(5), 42), app(app(var(5), 41), app(app(var(5), 40), var(4)))))),
 %            app(var(0), app(app(var(5), 1), var(4)))))
 %int
+
+runelab(let(x=cons(1,nil),car(x)),X,Z).
+
+runelab(let(x=2,x(i)=i+x,x(l)=cons(2,l),x+x(car(x(nil)))),X,Z).
