@@ -1,16 +1,12 @@
-Compréhension générale:
-    Surcharge:
-        Par ce devoir, nous avons vu d'une différent point de vue le concept "surcharge". Quand nous faisons le cours IFT1025,
-        le prof a montré la "surcharge" de Java: il est possible de définir plusieurs méthodes avec un même nom mais avec différentes
-        signatures. Ici, la "surcharge" veut dire qu'on pourrait avoir plusieurs définitions actives pour un même identificateur.
-        A cause de l'existance de cette "surcharge", la façon de laquelle H2035 trouve une variable sur son occurrence est de 
-        comparer son type en plus du nom avec celui des variables dans l'environnement.
-
-    Indices de De Bruijn:
-        Une autre nouvelle notion nous a été menée, c'est la "indice de De Bruijn".
-        Conduits par la curiosité, nous sommes allés chercher plus de détails sur ça. Cet indice a été créé pour dénoter des termes
-        dans le lambda calcul. Au lieu de spécifier le nom des termes, on pourrait plutôt utiliser un nombre pour indiquer l'occurrence 
-        d'une variable. Le nombre s'exprime la position d'une variable dans l'environnement au moment de l'usage de cette variable.
+Options que nous avons rejetées:
+    À cause de certains facteurs, nous avons décidé de renoncer à réaliser les fonctionnalités du H2035 ci-dessous:
+    1. Récursion mutuelle. Basé de nos codes, si faire par exemple "runelab(let([x = 1, x = lambda(a, a + 1)], (3 + x(x))), T, V).",
+    le programme va s'exécute à l'infinie.
+    2. Inférence du polymorphisme. Si une expression est de type polymorphe, notre programme n'est pas en mesure d'inférer son type.
+    Par exemple, "runelab(lambda(x, x), T, V)." va donner "(_A->_A)" pour T, au lieu de "forall(t, t -> t)". De plus, certains
+    expressions résultant un type polymorphe pourraient mener le programme dans une boucle infinie.
+    3. Récursion. Si l'on exécute une expression contenant la résursion, par exemple "runelab(let(f(x)=if(empty(x),0,f(cdr(x))),
+    f(cons(1,nil))),X,Z).", le programme va s'exécute à l'infinie.
 
 Connaissance requise par rapport au Prolog:
     Pendant que nous complètent le langage du futur "H2035" en utilisant "Prolog" que nous avons vu au cours, nous avons
@@ -29,6 +25,21 @@ Connaissance requise par rapport au Prolog:
     "f(x1, ..., xn) =.. [f, x1, ..., xn]".
     4. En Prolog, plusieurs opérateur peuvent être utilisés de plus d'une manière. Soit s'écrire l'expression infixe, soit la 
     forme prédicat. Par exemple, "+(1, 2)" est équivalent à "1 + 2".
+    
+Surprise obtenue pendant la compréhension du TP:
+    Surcharge: 
+        Par ce devoir, nous avons vu d'une différent point de vue le concept "surcharge". Quand nous faisons le cours IFT1025,
+        le prof a montré la "surcharge" de Java: il est possible de définir plusieurs méthodes avec un même nom mais avec différentes
+        signatures. Ici, la "surcharge" veut dire qu'on pourrait avoir plusieurs définitions actives pour un même identificateur.
+        A cause de l'existance de cette "surcharge", la façon de laquelle H2035 trouve une variable sur son occurrence est de 
+        comparer son type en plus du nom avec celui des variables dans l'environnement.
+
+    Indices de De Bruijn:
+        Une autre nouvelle notion nous a été menée, c'est la "indice de De Bruijn".
+        Conduits par la curiosité, nous sommes allés chercher plus de détails sur ça. Cet indice a été créé pour dénoter des termes
+        dans le lambda calcul. Au lieu de spécifier le nom des termes, on pourrait plutôt utiliser un nombre pour indiquer l'occurrence 
+        d'une variable, qui indique la position d'une variable dans l'environnement au moment de l'usage de cette variable.
+
 
 Problèmes rencontrés:
     1. Quand nous concevions le "if" de la phase élaboration, nous avons rencontré un problème par rapport au type
@@ -82,4 +93,6 @@ Problèmes rencontrés:
                         find_var(ResEnv, Ele, Type, Idx1), Idx is Idx1 + 1. 
     et avons remplacé le "find_index" dans le "elaborate(Env, Var, T, var(Idx))" par cette nouvelle règle. Cette nouvelle règle 
     permet de comparer le type lorsque chercher des variables. Ainsi, nous pourrons correctement trouver une variable "x" selon 
-    son type même s'il y a plusieurs variables de même nom dans l'environnement.  
+    son type même s'il y a plusieurs variables de même nom dans l'environnement.
+    
+    3. Le plus difficile problème que nous avons rencontré est par rapport au un"let". 
