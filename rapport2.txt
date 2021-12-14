@@ -1,46 +1,3 @@
-Options que nous avons rejetées:
-    À cause de certains facteurs, nous avons décidé de renoncer à réaliser les fonctionnalités du H2035 ci-dessous:
-    1. Récursion mutuelle. Basé de nos codes, si faire par exemple "runelab(let([x = 1, x = lambda(a, a + 1)], (3 + x(x))), T, V).",
-    le programme va s'exécute à l'infinie.
-    2. Inférence du polymorphisme. Si une expression est de type polymorphe, notre programme n'est pas en mesure d'inférer son type.
-    Par exemple, "runelab(lambda(x, x), T, V)." va donner "(_A->_A)" pour T, au lieu de "forall(t, t -> t)". De plus, certains
-    expressions résultant un type polymorphe pourraient mener le programme dans une boucle infinie.
-    3. Récursion. Si l'on exécute une expression contenant la résursion, par exemple "runelab(let(f(x)=if(empty(x),0,f(cdr(x))),
-    f(cons(1,nil))),X,Z).", le programme va s'exécute à l'infinie.
-
-Connaissance requise par rapport au Prolog:
-    Pendant que nous complètent le langage du futur "H2035" en utilisant "Prolog" que nous avons vu au cours, nous avons
-    fouillé pas mal de choses intéressantes par rapport au Prolog, y compris son mécanisme d'exécution. En même temps,
-    nous nous sommes fait maîtriser un peu plus ce langage de programmation.
-    1. Dans un programme de Prolog, nous utilisent pas mal de "pattern matching" pour construire notre codes. Ce qui est 
-    vraiment similaire au Haskell. Mais une différences entre eux est que nous appellent les codes "règle" en Prolog
-    plutôt que "fonction".
-    2. Le mécanisme d'exécution principal de Prolog est ce qu'on appelle "Unification". Lorsqu'on lance une requête, Prolog
-    va unifie les variables dans la requête avec des instances trouvées pendant son exécution, et après nous donne un résultat.
-    Un avantage de ce mécanisme est qu'on puisse simplier nos codes. Dans des langages de programmation impératifs tel que C,
-    Java, Python, il faut demande à l'ordinateur ce qu'il doit faire étape par étape. Par contre, en Prolog, il suffit de 
-    préciser, dans nos codes, la logique que l'ordinateur doit suivre.
-    3. Nous avons appris de nouvelles grammaires par rapport au Prolog pendant ce devoir. Par exemple, pour réaliser "if else",
-    on doit utiliser "Condition1 -> E1; Condition2 -> E2 ...". L'opérateur "=.." peut déconstruire une règle en une liste, comme
-    "f(x1, ..., xn) =.. [f, x1, ..., xn]".
-    4. En Prolog, plusieurs opérateur peuvent être utilisés de plus d'une manière. Soit s'écrire l'expression infixe, soit la 
-    forme prédicat. Par exemple, "+(1, 2)" est équivalent à "1 + 2".
-    
-Surprise obtenue pendant la compréhension du TP:
-    Surcharge: 
-        Par ce devoir, nous avons vu d'une différent point de vue le concept "surcharge". Quand nous faisons le cours IFT1025,
-        le prof a montré la "surcharge" de Java: il est possible de définir plusieurs méthodes avec un même nom mais avec différentes
-        signatures. Ici, la "surcharge" veut dire qu'on pourrait avoir plusieurs définitions actives pour un même identificateur.
-        A cause de l'existance de cette "surcharge", la façon de laquelle H2035 trouve une variable sur son occurrence est de 
-        comparer son type en plus du nom avec celui des variables dans l'environnement.
-
-    Indices de De Bruijn:
-        Une autre nouvelle notion nous a été menée, c'est la "indice de De Bruijn".
-        Conduits par la curiosité, nous sommes allés chercher plus de détails sur ça. Cet indice a été créé pour dénoter des termes
-        dans le lambda calcul. Au lieu de spécifier le nom des termes, on pourrait plutôt utiliser un nombre pour indiquer l'occurrence 
-        d'une variable, qui indique la position d'une variable dans l'environnement au moment de l'usage de cette variable.
-
-
 Problèmes rencontrés:
     1. Quand nous concevions le "if" de la phase élaboration, nous avons rencontré un problème par rapport au type
     de "if". Vu qu'il y a deux branches dans un "if", laquelle devrions-nous prendre comme le type de ce "if"?
@@ -95,4 +52,69 @@ Problèmes rencontrés:
     permet de comparer le type lorsque chercher des variables. Ainsi, nous pourrons correctement trouver une variable "x" selon 
     son type même s'il y a plusieurs variables de même nom dans l'environnement.
     
-    3. Le plus difficile problème que nous avons rencontré est par rapport au un"let". 
+    3. Le plus difficile problème que nous avons rencontré était par rapport à un aspect du "let".
+    Voyons un exemple: runeval(let(x=1, x=lambda(i, x+i), 1), X, Z). Dans le corps de la fonction x, on a aussi une varialbe x 
+    qui fait référence au x qu'on a défini just devant là. Si l'on exécute ce programme, on va aller dans une boucle infinie. 
+    Plus généralement, si l'on "let" plus d'une variables ayant le même nom, disons "x", et qu'une des x est utilisée dans 
+    le corps d'une autre x(évidemment les deux x sont de types différents), ça va nous amener à une boucle infinie.
+    Après avoir "traced" pas à pas cet exemple ci-dessus en utilisant "trace", nous avons trouvé la source qui a causé cette erreur.
+    ça vient de la règle que le prof nous a donné:
+                                    elaborate(Env, lambda(X,E), T, lambda(DE)) :-
+                                        !, elaborate([(X,T1)|Env], E, T2, DE), T = (T1 -> T2).
+    Nous avons corrigée cet règle en ça, puis cet exemple ci-dessus fonctionnait bien:
+                                    elaborate(Env, lambda(X,E), (T1 -> T2), lambda(DE)) :-
+                                        !, elaborate([(X,T1)|Env], E, T2, DE).
+
+    Pourquoi cette erreur s'est produite avec la version du prof? Comme le type à être retourné par "lambda" n'est qu‘une seule 
+    variable "T" avant de tout finir d'exécuter cette règle, "T" peut être unifiée à n'importe quelle forme d'instance, 
+    par exemple "int", "int -> int", etc. Quand nous faisons le "trace", nous avons trouvé avec surprise que le type de 
+    la x deuxièmement définie dans l'exemple avait été unifié à "int". À cause de ça, lorsque le programme faisait "T = (T1 -> T2)",
+    ça a donné "false" car "int" n'était pas de la forme "X -> Y". Puis le programme est retourné à l'étape d'avant(le 
+    mécanisme "backtracing"). Mais T allait être encore unifiée à "int", donc il a toujours échoué sur "T = (T1 -> T2)". Ainsi, 
+    le programme a bouclé.
+    Après la correction de la règle, on a réussi de faire l'unification du type, parce que le type de la "x" était bien de la forme
+    "T1 -> T2" au tout début, ce qui représente une fonction.
+
+Connaissance requise par rapport au Prolog:
+    Pendant que nous complètent le langage du futur "H2035" en utilisant "Prolog" que nous avons vu au cours, nous avons
+    fouillé pas mal de choses intéressantes par rapport au Prolog, y compris son mécanisme d'exécution. En même temps,
+    nous nous sommes fait maîtriser un peu plus ce langage de programmation.
+    1. Nous avons appris de nouvelles grammaires par rapport au Prolog pendant ce devoir. Par exemple, pour réaliser "if else",
+    on doit utiliser "Condition1 -> E1; Condition2 -> E2 ...". L'opérateur "=.." peut déconstruire une règle en une liste, comme
+    "f(x1, ..., xn) =.. [f, x1, ..., xn]".
+    2. Dans un programme de Prolog, nous utilisent pas mal de "pattern matching" pour construire notre codes. Ce qui est 
+    vraiment similaire au Haskell. Mais une différences entre eux est que nous appellent les codes "règle" en Prolog
+    plutôt que "fonction".
+    3. Le mécanisme d'exécution principal de Prolog est ce qu'on appelle "Unification". Lorsqu'on lance une requête, Prolog
+    va unifie les variables dans la requête avec des instances trouvées pendant son exécution, et après nous donne un résultat.
+    Un avantage de ce mécanisme est qu'on puisse simplier nos codes. Dans des langages de programmation impératifs tel que C,
+    Java, Python, il faut demande à l'ordinateur ce qu'il doit faire étape par étape. Par contre, en Prolog, il suffit de 
+    préciser, dans nos codes, la logique que l'ordinateur doit suivre.
+    4. En Prolog, plusieurs opérateur peuvent être utilisés de plus d'une manière. Soit s'écrire l'expression infixe, soit la 
+    forme prédicat. Par exemple, "+(1, 2)" est équivalent à "1 + 2".
+    
+Surprise obtenue pendant la compréhension du TP:
+    Surcharge: 
+        Par ce devoir, nous avons vu d'une différent point de vue le concept "surcharge". Quand nous faisons le cours IFT1025,
+        le prof a montré la "surcharge" de Java: il est possible de définir plusieurs méthodes avec un même nom mais avec différentes
+        signatures. Ici, la "surcharge" veut dire qu'on pourrait avoir plusieurs définitions actives pour un même identificateur.
+        A cause de l'existance de cette "surcharge", la façon de laquelle H2035 trouve une variable sur son occurrence est de 
+        comparer son type en plus du nom avec celui des variables dans l'environnement.
+
+    Indices de De Bruijn:
+        Une autre nouvelle notion nous a été menée, c'est la "indice de De Bruijn".
+        Conduits par la curiosité, nous sommes allés chercher plus de détails sur ça. Cet indice a été créé pour dénoter des termes
+        dans le lambda calcul. Au lieu de spécifier le nom des termes, on pourrait plutôt utiliser un nombre pour indiquer l'occurrence 
+        d'une variable, qui indique la position d'une variable dans l'environnement au moment de l'usage de cette variable.
+
+Options que nous avons rejetées:
+    À cause de certains facteurs, nous avons décidé de renoncer à réaliser les fonctionnalités du H2035 ci-dessous:
+    1. Récursion mutuelle. Basé de nos codes, si faire par exemple "runelab(let([x = 1, x = lambda(a, a + 1)], (3 + x(x))), T, V).",
+    le programme va s'exécute à l'infinie.
+    2. Inférence du polymorphisme. Si une expression est de type polymorphe, notre programme n'est pas en mesure d'inférer son type.
+    Par exemple, "runelab(lambda(x, x), T, V)." va donner "(_A->_A)" pour T, au lieu de "forall(t, t -> t)". De plus, certains
+    expressions résultant un type polymorphe pourraient mener le programme dans une boucle infinie.
+    3. Récursion. Si l'on exécute une expression contenant la résursion, par exemple "runelab(let(f(x)=if(empty(x),0,f(cdr(x))),
+    f(cons(1,nil))),X,Z).", le programme va s'exécute à l'infinie.
+    4. L'expression "?". Nous avons seulement réalisé une version simple de "?", qui ne nous permet que de remplacer le "cons".
+    5. L'expression "(e : τ)" a aussi été rejetée.
